@@ -1,0 +1,73 @@
+import pandas as pd
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from imblearn.over_sampling import RandomOverSampler
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Read the CSV file
+data = pd.read_csv('/content/drive/MyDrive/fraudulent credit card transactions/fraudTrain.csv')
+
+# Limit data to first 100000 rows
+data = data.head(100000)
+
+# Drop rows with missing values
+data.dropna(subset=['unix_time', 'merch_lat', 'merch_long', 'is_fraud'], inplace=True)
+
+# Factorize categorical columns
+for column in data.select_dtypes(include=['object']).columns:
+    data[column], _ = pd.factorize(data[column])
+
+# Define features (x) and target (y)
+x = data.drop('is_fraud', axis=1)
+y = data['is_fraud']
+
+# Resample the data to handle class imbalance
+ros = RandomOverSampler(random_state=42)
+x_resampled, y_resampled = ros.fit_resample(x, y)
+
+# Split resampled data into train and test sets
+x_train, x_test, y_train, y_test = train_test_split(x_resampled, y_resampled, test_size=0.2, random_state=42)
+
+# Define models
+models = {
+    'random_model': RandomForestClassifier(),
+    'logistic_model': LogisticRegression(),
+    'decision_model': DecisionTreeClassifier()
+}
+
+# Initialize results DataFrame
+results = pd.DataFrame(columns=['Model', 'Accuracy_score', 'Cross_val_score'])
+
+# Train and evaluate models
+for model_name, model in models.items():
+    model.fit(x_train, y_train)
+    prediction = model.predict(x_test)
+    accuracy = accuracy_score(y_test, prediction)
+    classification_rep = classification_report(y_test, prediction)
+    confusion_mat = confusion_matrix(y_test, prediction)
+    cross_val_scores = cross_val_score(model, x_resampled, y_resampled, cv=5, scoring='accuracy')
+    avg_cross_val_score = cross_val_scores.mean()
+    
+    results = results.append({'Model': model_name, 'Accuracy_score': accuracy, 'Cross_val_score': avg_cross_val_score}, ignore_index=True)
+    
+    print(f'{model_name}:')
+    print(f'Confusion Matrix:\n{confusion_mat}')
+    print(f'Classification Report:\n{classification_rep}')
+    print(f'Accuracy Score: {accuracy}')
+    print(f'Average Cross-Validation Score: {avg_cross_val_score}\n')
+
+# Plot the results
+plt.figure(figsize=(10, 6))
+sns.barplot(x='Model', y='Accuracy_score', data=results)
+plt.title('Accuracy score VS Model')
+plt.xlabel('Model')
+plt.ylabel('Accuracy Score')
+plt.grid(linestyle='--')
+plt.show()
+
+# Print results DataFrame
+print(results)
